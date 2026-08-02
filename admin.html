@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReDroidCPP - মেইন অ্যাডমিন প্যানেল</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body { background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+        .hidden { display: none !important; }
+        
+        /* Login */
+        .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .login-card { background: #1e293b; padding: 40px; border-radius: 16px; width: 100%; max-width: 400px; box-shadow: 0 25px 50px rgba(0,0,0,0.5); }
+        .login-card h1 { text-align: center; margin-bottom: 30px; color: #60a5fa; font-size: 28px; }
+        .login-card h1 span { font-size: 40px; }
+        .f-group { margin-bottom: 20px; }
+        .f-group label { display: block; margin-bottom: 8px; color: #94a3b8; font-size: 14px; }
+        .f-group input, .f-group select { width: 100%; padding: 14px 16px; background: #0f172a; border: 1px solid #334155; border-radius: 10px; color: #fff; font-size: 16px; transition: all 0.3s; }
+        .f-group input:focus, .f-group select:focus { outline: none; border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(96,165,250,0.2); }
+        .btn { width: 100%; padding: 14px; background: #3b82f6; color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+        .btn:hover { background: #2563eb; transform: translateY(-1px); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .btn-dan { background: #dc2626; }
+        .btn-dan:hover { background: #b91c1c; }
+        .btn-suc { background: #16a34a; }
+        .btn-suc:hover { background: #15803d; }
+        .btn-war { background: #d97706; color: #000; }
+        .btn-war:hover { background: #b45309; }
+        .btn-outline { background: transparent; border: 1px solid #334155; }
+        .btn-outline:hover { background: #334155; }
+        .msg { padding: 14px; border-radius: 10px; margin-bottom: 20px; text-align: center; font-size: 14px; }
+        .msg-err { background: rgba(220,38,38,0.2); color: #fca5a5; border: 1px solid rgba(220,38,38,0.3); }
+        .msg-suc { background: rgba(22,163,74,0.2); color: #86efac; border: 1px solid rgba(22,163,74,0.3); }
+        
+        /* Dashboard */
+        .dash { padding: 20px; max-width: 1400px; margin: 0 auto; }
+        .dash-head { background: #1e293b; padding: 20px 30px; border-radius: 14px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+        .dash-head h2 { color: #60a5fa; }
+        .dash-head-right { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        .role-tag { background: #dc2626; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+        
+        /* Stats */
+        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat-box { background: #1e293b; padding: 20px; border-radius: 14px; text-align: center; }
+        .stat-box h3 { font-size: 36px; color: #60a5fa; margin-bottom: 4px; }
+        .stat-box p { color: #94a3b8; font-size: 13px; }
+        .stat-box.suc h3 { color: #4ade80; }
+        .stat-box.warn h3 { color: #fbbf24; }
+        .stat-box.dan h3 { color: #f87171; }
+        
+        /* Tabs */
+        .tab-wrap { background: #1e293b; border-radius: 14px; overflow: hidden; margin-bottom: 24px; }
+        .tab-bar { display: flex; border-bottom: 1px solid #334155; overflow-x: auto; }
+        .tab-btn { flex: 1; min-width: 100px; padding: 14px; background: none; border: none; color: #94a3b8; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.3s; position: relative; }
+        .tab-btn.active { color: #60a5fa; }
+        .tab-btn.active::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: #60a5fa; }
+        .tab-panel { padding: 20px; display: none; }
+        .tab-panel.active { display: block; }
+        
+        /* Search */
+        .search-bar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+        .search-bar input { flex: 1; min-width: 200px; padding: 12px 16px; background: #0f172a; border: 1px solid #334155; border-radius: 10px; color: #fff; font-size: 14px; }
+        .search-bar input:focus { outline: none; border-color: #60a5fa; }
+        
+        /* Section Title */
+        .section-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .section-title h3 { color: #94a3b8; font-size: 16px; }
+        
+        /* Table */
+        .data-table { width: 100%; border-collapse: collapse; overflow-x: auto; display: block; }
+        .data-table th { text-align: left; padding: 12px; background: #0f172a; color: #94a3b8; font-weight: 600; font-size: 12px; text-transform: uppercase; white-space: nowrap; }
+        .data-table td { padding: 12px; border-bottom: 1px solid #334155; white-space: nowrap; font-size: 14px; }
+        .data-table tr:hover { background: rgba(96,165,250,0.05); }
+        .badge { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; display: inline-block; }
+        .badge-grn { background: rgba(22,163,74,0.2); color: #4ade80; }
+        .badge-yel { background: rgba(217,119,6,0.2); color: #fbbf24; }
+        .badge-red { background: rgba(220,38,38,0.2); color: #f87171; }
+        .act { display: flex; gap: 6px; flex-wrap: wrap; }
+        .act button { padding: 5px 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; }
+        
+        /* Modal */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 999; padding: 20px; }
+        .modal-box { background: #1e293b; padding: 24px; border-radius: 14px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
+        .modal-box h3 { margin-bottom: 20px; color: #60a5fa; font-size: 18px; }
+        .modal-foot { display: flex; gap: 12px; margin-top: 24px; }
+        .modal-foot button { flex: 1; }
+        .req-info { background: #0f172a; padding: 14px; border-radius: 10px; margin-bottom: 16px; }
+        .req-info p { margin: 4px 0; color: #94a3b8; font-size: 14px; }
+        .req-info strong { color: #e2e8f0; }
+        
+        .empty-state { text-align: center; padding: 40px 20px; color: #64748b; }
+        .empty-state span { font-size: 40px; display: block; margin-bottom: 12px; }
+        
+        /* Loading */
+        .loading { display: flex; align-items: center; justify-content: center; padding: 40px; color: #64748b; }
+        .spinner { width: 30px; height: 30px; border: 3px solid #334155; border-top-color: #60a5fa; border-radius: 50%; animation: spin 1s linear infinite; margin-right: 10px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* Admin List */
+        .admin-card { background: #0f172a; padding: 16px; border-radius: 10px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+        .admin-info h4 { color: #e2e8f0; margin-bottom: 4px; }
+        .admin-info p { color: #64748b; font-size: 13px; }
+        .admin-actions { display: flex; gap: 8px; }
+        
+        @media (max-width: 768px) {
+            .dash-head { flex-direction: column; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .data-table { font-size: 12px; }
+            .data-table th, .data-table td { padding: 8px 6px; }
+            .act { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Page -->
+    <div id="loginPage" class="login-wrap">
+        <div class="login-card">
+            <h1><span>👑</span><br>মেইন অ্যাডমিন</h1>
+            <div id="loginMsg" class="msg hidden"></div>
+            <form id="loginForm">
+                <div class="f-group">
+                    <label>ইমেইল</label>
+                    <input type="email" id="email" placeholder="admin@example.com" required>
+                </div>
+                <div class="f-group">
+                    <label>পাসওয়ার্ড</label>
+                    <input type="password" id="pass" placeholder="পাসওয়ার্ড" required>
+                </div>
+                <button type="submit" class="btn" id="loginBtn">লগইন</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashPage" class="dash hidden">
+        <div class="dash-head">
+            <h2>📱 ReDroidCPP মেইন অ্যাডমিন</h2>
+            <div class="dash-head-right">
+                <span class="role-tag" id="userEmail">👑 মেইন অ্যাডমিন</span>
+                <button class="btn" onclick="logout()" style="width: auto; padding: 10px 20px;">লগআউট</button>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-row">
+            <div class="stat-box">
+                <h3 id="sPending">-</h3>
+                <p>পেন্ডিং রিকোয়েস্ট</p>
+            </div>
+            <div class="stat-box suc">
+                <h3 id="sActive">-</h3>
+                <p>অ্যাক্টিভ ইউজার</p>
+            </div>
+            <div class="stat-box warn">
+                <h3 id="sBlocked">-</h3>
+                <p>ব্লকড ইউজার</p>
+            </div>
+            <div class="stat-box dan">
+                <h3 id="sSubAdmin">-</h3>
+                <p>সাব-অ্যাডমিন</p>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tab-wrap">
+            <div class="tab-bar">
+                <button class="tab-btn active" onclick="switchTab('users')">👥 ইউজার ম্যানেজ</button>
+                <button class="tab-btn" onclick="switchTab('admins')">👨‍💼 অ্যাডমিন ম্যানেজ</button>
+            </div>
+
+            <!-- Users Tab -->
+            <div id="panelUsers" class="tab-panel active">
+                <!-- Search -->
+                <div class="search-bar">
+                    <input type="text" id="searchInput" placeholder="ফোন নম্বর বা Key দিয়ে সার্চ করুন..." oninput="searchUsers()">
+                    <button class="btn btn-suc" onclick="showCreateUser()" style="width: auto; padding: 12px 20px;">+ নতুন ইউজার</button>
+                </div>
+
+                <!-- Pending Requests -->
+                <div class="section-title">
+                    <h3>📥 পেন্ডিং রিকোয়েস্ট</h3>
+                </div>
+                <div id="pendingList"><div class="loading"><div class="spinner"></div>লোড হচ্ছে...</div></div>
+
+                <!-- Accepted Users -->
+                <div class="section-title" style="margin-top: 30px;">
+                    <h3>✅ অ্যাক্টিভ ইউজার</h3>
+                </div>
+                <div id="acceptedList"><div class="loading"><div class="spinner"></div>লোড হচ্ছে...</div></div>
+            </div>
+
+            <!-- Admins Tab -->
+            <div id="panelAdmins" class="tab-panel">
+                <div class="section-title">
+                    <h3>👨‍💼 সাব-অ্যাডমিন তালিকা</h3>
+                    <button class="btn btn-suc" onclick="showCreateAdmin()" style="width: auto; padding: 10px 20px;">+ নতুন সাব-অ্যাডমিন</button>
+                </div>
+                <div id="adminList"><div class="loading"><div class="spinner"></div>লোড হচ্ছে...</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Accept Modal -->
+    <div id="acceptModal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <h3>✅ রিকোয়েস্ট গ্রহণ</h3>
+            <div id="reqInfo" class="req-info"></div>
+            <div class="f-group">
+                <label>প্রোফাইল সংখ্যা</label>
+                <input type="number" id="aProfiles" min="1" value="3" style="width: 100%;">
+            </div>
+            <div class="f-group">
+                <label>মেয়াদকাল</label>
+                <select id="aDuration" style="width: 100%;">
+                    <option value="5">৫ মিনিট</option>
+                    <option value="15">১৫ মিনিট</option>
+                    <option value="30">৩০ মিনিট</option>
+                    <option value="60">৬০ মিনিট (১ ঘণ্টা)</option>
+                    <option value="1440" selected>১ দিন</option>
+                    <option value="4320">৩ দিন</option>
+                    <option value="10080">৭ দিন (১ সপ্তাহ)</option>
+                    <option value="21600">১৫ দিন</option>
+                    <option value="43200">১ মাস</option>
+                    <option value="525600">১ বছর</option>
+                </select>
+            </div>
+            <div class="modal-foot">
+                <button class="btn" onclick="closeAccept()">না</button>
+                <button class="btn btn-suc" onclick="doAccept()">গ্রহণ করুন</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create User Modal -->
+    <div id="createUserModal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <h3>➕ নতুন ইউজার তৈরি</h3>
+            <div class="f-group">
+                <label>নাম (ঐচ্ছিক)</label>
+                <input type="text" id="cuName" placeholder="ইউজারের নাম">
+            </div>
+            <div class="f-group">
+                <label>ফোন নম্বর (ঐচ্ছিক)</label>
+                <input type="tel" id="cuPhone" placeholder="01XXXXXXXXX">
+            </div>
+            <div class="f-group">
+                <label>প্রোফাইল সংখ্যা</label>
+                <input type="number" id="cuProfiles" min="1" value="3">
+            </div>
+            <div class="f-group">
+                <label>মেয়াদকাল</label>
+                <select id="cuDuration">
+                    <option value="5">৫ মিনিট</option>
+                    <option value="15">১৫ মিনিট</option>
+                    <option value="30">৩০ মিনিট</option>
+                    <option value="60">৬০ মিনিট (১ ঘণ্টা)</option>
+                    <option value="1440" selected>১ দিন</option>
+                    <option value="4320">৩ দিন</option>
+                    <option value="10080">৭ দিন (১ সপ্তাহ)</option>
+                    <option value="21600">১৫ দিন</option>
+                    <option value="43200">১ মাস</option>
+                    <option value="525600">১ বছর</option>
+                </select>
+            </div>
+            <div class="modal-foot">
+                <button class="btn" onclick="closeCreateUser()">না</button>
+                <button class="btn btn-suc" onclick="doCreateUser()">তৈরি করুন</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reject Modal -->
+    <div id="rejectModal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <h3>❌ রিকোয়েস্ট বাতিল</h3>
+            <div class="f-group">
+                <label>কারণ (ঐচ্ছিক)</label>
+                <input type="text" id="rReason" placeholder="বাতিলের কারণ লিখুন...">
+            </div>
+            <div class="modal-foot">
+                <button class="btn" onclick="closeReject()">না</button>
+                <button class="btn btn-dan" onclick="doReject()">বাতিল করুন</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Admin Modal -->
+    <div id="createAdminModal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <h3>➕ নতুন সাব-অ্যাডমিন তৈরি</h3>
+            <div class="f-group">
+                <label>নাম</label>
+                <input type="text" id="caName" placeholder="সাব-অ্যাডমিনের নাম" required>
+            </div>
+            <div class="f-group">
+                <label>ফোন নম্বর</label>
+                <input type="tel" id="caPhone" placeholder="01XXXXXXXXX" required>
+            </div>
+            <div class="f-group">
+                <label>ইমেইল</label>
+                <input type="email" id="caEmail" placeholder="subadmin@example.com" required>
+            </div>
+            <div class="f-group">
+                <label>পাসওয়ার্ড (নিন্মতম ৬ অক্ষর)</label>
+                <input type="password" id="caPass" placeholder="পাসওয়ার্ড" required minlength="6">
+            </div>
+            <div class="modal-foot">
+                <button class="btn" onclick="closeCreateAdmin()">না</button>
+                <button class="btn btn-suc" onclick="doCreateAdmin()">তৈরি করুন</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Admin Modal -->
+    <div id="editAdminModal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <h3>✏️ সাব-অ্যাডমিন সম্পাদনা</h3>
+            <input type="hidden" id="eaId">
+            <div class="f-group">
+                <label>নাম</label>
+                <input type="text" id="eaName" required>
+            </div>
+            <div class="f-group">
+                <label>ফোন নম্বর</label>
+                <input type="tel" id="eaPhone" required>
+            </div>
+            <div class="f-group">
+                <label>নতুন পাসওয়ার্ড (ঐচ্ছিক)</label>
+                <input type="password" id="eaPass" placeholder="নতুন পাসওয়ার্ড (রাখতে চাইলে খালি রাখুন)">
+            </div>
+            <div class="modal-foot">
+                <button class="btn" onclick="closeEditAdmin()">না</button>
+                <button class="btn btn-suc" onclick="doEditAdmin()">সংরক্ষণ</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAItRrMoZyrDtA58aNKt7mTKprBy-4_4gA",
+            authDomain: "redroid-d8110.firebaseapp.com",
+            databaseURL: "https://redroid-d8110-default-rtdb.firebaseio.com",
+            projectId: "redroid-d8110",
+            storageBucket: "redroid-d8110.firebasestorage.app",
+            messagingSenderId: "510470247935",
+            appId: "1:510470247935:web:37b6dd7ea508b1289e43ca"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+
+        let currentUser = null;
+        let pendingData = [], activeData = [];
+        let curReqId = null;
+        let allData = [];
+
+        function showLogin() {
+            document.getElementById('loginPage').classList.remove('hidden');
+            document.getElementById('dashPage').classList.add('hidden');
+        }
+
+        function showDash() {
+            document.getElementById('loginPage').classList.add('hidden');
+            document.getElementById('dashPage').classList.remove('hidden');
+        }
+
+        function logout() {
+            auth.signOut().then(() => showLogin());
+        }
+
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                currentUser = user;
+                document.getElementById('userEmail').textContent = '👑 ' + (user.email || 'অ্যাডমিন');
+                showDash();
+                loadAll();
+            } else {
+                showLogin();
+            }
+        });
+
+        document.getElementById('loginForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('loginBtn');
+            const msg = document.getElementById('loginMsg');
+            btn.disabled = true;
+            msg.classList.add('hidden');
+
+            try {
+                await auth.signInWithEmailAndPassword(
+                    document.getElementById('email').value,
+                    document.getElementById('pass').value
+                );
+            } catch (err) {
+                let errMsg = 'লগইন ব্যর্থ';
+                if (err.code === 'auth/user-not-found') errMsg = 'এই ইমেইল এ কোন অ্যাকাউন্ট নেই';
+                else if (err.code === 'auth/wrong-password') errMsg = 'পাসওয়ার্ড ভুল';
+                msg.textContent = errMsg;
+                msg.className = 'msg msg-err';
+                btn.disabled = false;
+            }
+        };
+
+        function generateKey() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let key = '';
+            for (let i = 0; i < 8; i++) key += chars.charAt(Math.floor(Math.random() * chars.length));
+            return key;
+        }
+
+        function getDurationText(minutes) {
+            if (minutes < 60) return minutes + ' মিনিট';
+            if (minutes < 1440) return (minutes / 60) + ' ঘণ্টা';
+            if (minutes < 43200) return (minutes / 1440) + ' দিন';
+            if (minutes < 525600) return (minutes / 43200) + ' মাস';
+            return (minutes / 525600) + ' বছর';
+        }
+
+        async function loadAll() {
+            await Promise.all([loadStats(), loadUsers(), loadAdmins()]);
+        }
+
+        async function loadStats() {
+            try {
+                console.log('[Admin] loadStats - starting...');
+                const [reqSnap, userSnap, blockSnap, adminSnap] = await Promise.all([
+                    db.collection('accessRequests').where('status', '==', 'pending').get(),
+                    db.collection('activeUsers').where('isBlocked', '==', false).get(),
+                    db.collection('activeUsers').where('isBlocked', '==', true).get(),
+                    db.collection('admins').get()
+                ]);
+                console.log('[Admin] loadStats - reqSnap:', reqSnap.size, 'userSnap:', userSnap.size, 'blockSnap:', blockSnap.size);
+                
+                document.getElementById('sPending').textContent = reqSnap.size;
+                document.getElementById('sActive').textContent = userSnap.size;
+                document.getElementById('sBlocked').textContent = blockSnap.size;
+                document.getElementById('sSubAdmin').textContent = adminSnap.size;
+            } catch (err) { 
+                console.error('[Admin] loadStats error:', err); 
+            }
+        }
+
+        async function loadUsers() {
+            try {
+                // Load pending requests (without orderBy - works without composite index)
+                const reqSnap = await db.collection('accessRequests')
+                    .where('status', '==', 'pending')
+                    .get();
+                    
+                console.log('[Admin] loadUsers - reqSnap:', reqSnap.size, 'docs');
+                
+                pendingData = reqSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                // Sort manually by requestedAt
+                pendingData.sort((a, b) => {
+                    const dateA = new Date(a.requestedAt || 0);
+                    const dateB = new Date(b.requestedAt || 0);
+                    return dateB - dateA;
+                });
+
+                // Load active users
+                console.log('[Admin] loadUsers - querying activeUsers...');
+                const userSnap = await db.collection('activeUsers')
+                    .get();
+                    
+                console.log('[Admin] loadUsers - userSnap:', userSnap.size, 'docs');
+                console.log('[Admin] loadUsers - userSnap.docs:', userSnap.docs);
+                
+                activeData = userSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                
+                // Debug: log how many users loaded
+                console.log('[Admin] Pending requests:', pendingData.length);
+                console.log('[Admin] Active users:', activeData.length);
+                activeData.forEach(u => console.log('[Admin] User:', u.userName, u.uniqueKey));
+
+                allData = [...pendingData, ...activeData];
+                renderPending();
+                renderActive();
+            } catch (err) { 
+                console.error('[Admin] loadUsers error:', err); 
+                alert('লোড করতে সমস্যা হয়েছে: ' + err.message);
+            }
+        }
+
+        function renderPending() {
+            const el = document.getElementById('pendingList');
+            if (!pendingData.length) {
+                el.innerHTML = '<div class="empty-state"><span>📭</span>কোন পেন্ডিং রিকোয়েস্ট নেই</div>';
+                return;
+            }
+            let html = '<table class="data-table"><thead><tr><th>নাম</th><th>ফোন</th><th>প্রোফাইল</th><th>মেয়াদ</th><th>তারিখ</th><th>অ্যাকশন</th></tr></thead><tbody>';
+            pendingData.forEach(r => {
+                const date = r.requestedAt ? new Date(r.requestedAt).toLocaleDateString('bn-BD') : '-';
+                html += `<tr>
+                    <td>${r.userName || '-'}</td>
+                    <td>${r.contactNumber || '-'}</td>
+                    <td>${r.profileCount || 0}</td>
+                    <td>${getDurationText(r.durationMinutes || 1440)}</td>
+                    <td>${date}</td>
+                    <td class="act">
+                        <button class="btn-suc" onclick="openAccept('${r.id}')">✅ গ্রহণ</button>
+                        <button class="btn-dan" onclick="openReject('${r.id}')">❌ বাতিল</button>
+                    </td>
+                </tr>`;
+            });
+            el.innerHTML = html + '</tbody></table>';
+        }
+
+        function renderActive(filtered = null) {
+            const el = document.getElementById('acceptedList');
+            
+            if (!el) {
+                console.error('[Admin] acceptedList element not found!');
+                return;
+            }
+            
+            let data = filtered || activeData;
+            
+            console.log('[Admin] renderActive called with', data.length, 'users');
+            
+            if (!data || !data.length) {
+                el.innerHTML = '<div class="empty-state"><span>👥</span>কোন অ্যাক্টিভ ইউজার নেই</div>';
+                return;
+            }
+
+            let html = '<table class="data-table"><thead><tr><th>নাম</th><th>ইউনিক কী</th><th>ফোন</th><th>প্রোফাইল</th><th>স্ট্যাটাস</th><th>তৈরি করেছে</th><th>অ্যাকশন</th></tr></thead><tbody>';
+            data.forEach(u => {
+                const st = u.isBlocked ? '<span class="badge badge-red">ব্লকড</span>' : '<span class="badge badge-grn">অ্যাক্টিভ</span>';
+                const createdBy = u.createdByName || (u.createdBy === currentUser?.uid ? 'আপনি' : 'অন্যান্য');
+                const btn = u.isBlocked 
+                    ? `<button class="btn-suc" onclick="unblockUser('${u.id}')">আনব্লক</button>`
+                    : `<button class="btn-war" onclick="blockUser('${u.id}')">ব্লক</button>`;
+                html += `<tr>
+                    <td>${u.userName || '-'}</td>
+                    <td><code style="background:#0f172a;padding:3px 6px;border-radius:4px;font-size:11px;">${u.uniqueKey || '-'}</code></td>
+                    <td>${u.contactNumber || '-'}</td>
+                    <td>${u.remainingProfiles || 0}/${u.totalProfiles || 0}</td>
+                    <td>${st}</td>
+                    <td><span style="color:#60a5fa;">${createdBy}</span></td>
+                    <td class="act">${btn}<button class="btn-dan" onclick="delUser('${u.id}')">ডিলিট</button></td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            el.innerHTML = html;
+            console.log('[Admin] Rendered', data.length, 'users in table');
+        }
+
+        async function loadAdmins() {
+            const el = document.getElementById('adminList');
+            try {
+                const snapshot = await db.collection('admins').get();
+                const admins = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                
+                if (!admins.length) {
+                    el.innerHTML = '<div class="empty-state"><span>👨‍💼</span>কোন সাব-অ্যাডমিন নেই</div>';
+                    return;
+                }
+
+                let html = '';
+                admins.forEach(a => {
+                    const st = a.isBlocked ? '<span class="badge badge-red">ব্লকড</span>' : '<span class="badge badge-grn">অ্যাক্টিভ</span>';
+                    html += `<div class="admin-card">
+                        <div class="admin-info">
+                            <h4>${a.name || '-'}</h4>
+                            <p>📱 ${a.phoneNumber || '-'} | 📧 ${a.email || '-'}</p>
+                            <p style="margin-top:4px;">${st}</p>
+                        </div>
+                        <div class="admin-actions">
+                            <button class="btn btn-outline" onclick="editAdmin('${a.id}')">✏️ সম্পাদনা</button>
+                            <button class="btn ${a.isBlocked ? 'btn-suc' : 'btn-war'}" onclick="${a.isBlocked ? `unblockAdmin('${a.id}')` : `blockAdmin('${a.id}')`}">${a.isBlocked ? 'আনব্লক' : 'ব্লক'}</button>
+                            <button class="btn btn-dan" onclick="delAdmin('${a.id}')">ডিলিট</button>
+                        </div>
+                    </div>`;
+                });
+                el.innerHTML = html;
+            } catch (err) { console.error(err); }
+        }
+
+        function searchUsers() {
+            const query = document.getElementById('searchInput').value.toLowerCase().trim();
+            if (!query) {
+                renderActive();
+                return;
+            }
+            const filtered = activeData.filter(u => 
+                (u.contactNumber && u.contactNumber.includes(query)) ||
+                (u.uniqueKey && u.uniqueKey.toLowerCase().includes(query)) ||
+                (u.userName && u.userName.toLowerCase().includes(query))
+            );
+            renderActive(filtered);
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            document.querySelector(`[onclick="switchTab('${tab}')"]`).classList.add('active');
+            document.getElementById('panel' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+        }
+
+        // Accept
+        function openAccept(id) {
+            curReqId = id;
+            const r = pendingData.find(x => x.id === id);
+            if (!r) return;
+            document.getElementById('reqInfo').innerHTML = `
+                <p><strong>নাম:</strong> ${r.userName || '-'}</p>
+                <p><strong>ফোন:</strong> ${r.contactNumber || '-'}</p>
+                <p><strong>অনুরোধ:</strong> ${r.profileCount || 0} প্রোফাইল, ${getDurationText(r.durationMinutes || 1440)}</p>
+            `;
+            document.getElementById('aProfiles').value = r.profileCount || 3;
+            document.getElementById('aDuration').value = r.durationMinutes || 1440;
+            document.getElementById('acceptModal').classList.remove('hidden');
+        }
+        function closeAccept() { document.getElementById('acceptModal').classList.add('hidden'); curReqId = null; }
+
+        async function doAccept() {
+            if (!curReqId) return;
+            const r = pendingData.find(x => x.id === curReqId);
+            const profiles = parseInt(document.getElementById('aProfiles').value) || 3;
+            const duration = parseInt(document.getElementById('aDuration').value) || 1440;
+            const uniqueKey = generateKey();
+
+            try {
+                await db.collection('activeUsers').doc(curReqId).set({
+                    userName: r.userName || 'User',
+                    contactNumber: r.contactNumber || '',
+                    uniqueKey,
+                    remainingProfiles: profiles,
+                    totalProfiles: profiles,
+                    durationMinutes: duration,
+                    isBlocked: false,
+                    createdAt: new Date().toISOString(),
+                    expiryDate: new Date(Date.now() + duration * 60000).toISOString(),
+                    createdBy: currentUser.uid,
+                    createdByName: 'অ্যাডমিন'
+                });
+                await db.collection('accessRequests').doc(curReqId).update({ status: 'accepted', uniqueKey, updatedAt: new Date().toISOString() });
+                alert(`✅ গ্রহণ করা হয়েছে!\n\nইউনিক কী: ${uniqueKey}\nপ্রোফাইল: ${profiles}\nমেয়াদ: ${getDurationText(duration)}`);
+                closeAccept();
+                loadAll();
+            } catch (err) { alert('সমস্যা: ' + err.message); }
+        }
+
+        // Reject
+        function openReject(id) { curReqId = id; document.getElementById('rejectModal').classList.remove('hidden'); }
+        function closeReject() { document.getElementById('rejectModal').classList.add('hidden'); curReqId = null; }
+        async function doReject() {
+            if (!curReqId) return;
+            try {
+                await db.collection('accessRequests').doc(curReqId).update({ status: 'rejected', rejectedReason: document.getElementById('rReason').value || 'কোন কারণ দেওয়া হয়নি', updatedAt: new Date().toISOString() });
+                closeReject();
+                loadAll();
+            } catch (err) { alert('সমস্যা: ' + err.message); }
+        }
+
+        // User Actions
+        async function blockUser(id) {
+            if (!confirm('এই ইউজারকে ব্লক করতে চান?')) return;
+            try {
+                await db.collection('activeUsers').doc(id).update({ isBlocked: true });
+                loadAll();
+            } catch (err) { alert('সমস্যা: ' + err.message); }
+        }
+        async function unblockUser(id) {
+            try {
+                await db.collection('activeUsers').doc(id).update({ isBlocked: false });
+                loadAll();
+            } catch (err) { alert('সমস্যা: ' + err.message); }
+        }
+        async function delUser(id) {
+            if (!confirm('⚠️ সতর্কতা!\n\nইউজার স্থায়ীভাবে মুছে ফেলা হবে। পূর্বাবস্থায় ফেরানো যাবে না!\n\nচালিয়ে যেতে চান?')) return;
+            try {
+                await db.collection('activeUsers').doc(id).delete();
+                loadAll();
+            } catch (err) { alert('সমস্যা: ' + err.message); }
+        }
+
+        // Create User
+        function showCreateUser() { document.getElementById('createUserModal').classList.remove('hidden'); }
+        function closeCreateUser() { document.getElementById('createUserModal').classList.add('hidden'); }
+        async function doCreateUser() {
+            const name = document.getElementById('cuName').value;
+            const phone = document.getElementById('cuPhone').value;
+            const profiles = parseInt(document.getElementById('cuProfiles').value) || 3;
+            const duration = parseInt(document.getElementById('cuDuration').value) || 1440;
+            const uniqueKey = generateKey();
+            const userId = 'user_' + Date.now();
+
+            try {
+                console.log('[Admin] Creating user:', name, 'with key:', uniqueKey);
+                
+                await db.collection('activeUsers').doc(userId).set({
+                    userName: name || 'User',
+                    contactNumber: phone || '',
+                    uniqueKey,
+                    remainingProfiles: profiles,
+                    totalProfiles: profiles,
+                    durationMinutes: duration,
+                    isBlocked: false,
+                    createdAt: new Date().toISOString(),
+                    expiryDate: new Date(Date.now() + duration * 60000).toISOString(),
+                    createdBy: currentUser ? currentUser.uid : 'admin',
+                    createdByName: 'অ্যাডমিন',
+                    isManuallyCreated: true
+                });
+                
+                console.log('[Admin] User created successfully, refreshing list...');
+                alert(`✅ ইউজার তৈরি হয়েছে!\n\nইউনিক কী: ${uniqueKey}\nপ্রোফাইল: ${profiles}\nমেয়াদ: ${getDurationText(duration)}`);
+                closeCreateUser();
+                
+                // Refresh the list after a short delay to ensure Firestore has indexed the document
+                await new Promise(resolve => setTimeout(resolve, 500));
+                loadAll();
+            } catch (err) { 
+                console.error('[Admin] User creation error:', err);
+                alert('সমস্যা: ' + err.message); 
+            }
+        }
+
+        // Admin Actions
+        function showCreateAdmin() { document.getElementById('createAdminModal').classList.remove('hidden'); }
+        function closeCreateAdmin() { document.getElementById('createAdminModal').classList.add('hidden'); document.getElementById('caName').value = ''; document.getElementById('caPhone').value = ''; document.getElementById('caEmail').value = ''; document.getElementById('caPass').value = ''; }
+        
+        async function doCreateAdmin() {
+            const name = document.getElementById('caName').value;
+            const phone = document.getElementById('caPhone').value;
+            const email = document.getElementById('caEmail').value;
+            const pass = document.getElementById('caPass').value;
+
+            try {
+                const cred = await auth.createUserWithEmailAndPassword(email, pass);
+                await db.collection('admins').doc(cred.user.uid).set({
+                    name, phoneNumber: phone, email,
+                    isSuperAdmin: false, isBlocked: false,
+                    createdAt: new Date().toISOString(),
+                    createdBy: currentUser.uid
+                });
+                alert('✅ সাব-অ্যাডমিন তৈরি হয়েছে!');
+                closeCreateAdmin();
+                loadAll();
+            } catch (err) {
+                let msg = 'সমস্যা হয়েছে';
+                if (err.code === 'auth/email-already-in-use') msg = 'এই ইমেইল আগে থেকে ব্যবহৃত';
+                else if (err.code === 'auth/weak-password') msg = 'পাসওয়ার্ড দুর্বল';
+                alert(msg);
+            }
+        }
+
+        function editAdmin(id) {
+            const admin = allData.find(a => a.id === id) || {};
+            // Find in activeData which is different
+            db.collection('admins').doc(id).get().then(doc => {
+                if (doc.exists) {
+                    const data = doc.data();
+                    document.getElementById('eaId').value = id;
+                    document.getElementById('eaName').value = data.name || '';
+                    document.getElementById('eaPhone').value = data.phoneNumber || '';
+                    document.getElementById('eaPass').value = '';
+                    document.getElementById('editAdminModal').classList.remove('hidden');
+                }
+            });
+        }
+        
+        function closeEditAdmin() { document.getElementById('editAdminModal').classList.add('hidden'); }
+        
+        async function doEditAdmin() {
+            const id = document.getElementById('eaId').value;
+            const name = document.getElementById('eaName').value;
+            const phone = document.getElementById('eaPhone').value;
+            const newPass = document.getElementById('eaPass').value;
+
+            try {
+                await db.collection('admins').doc(id).update({ name, phoneNumber: phone });
+                if (newPass) {
+                    // Note: Password change requires re-authentication in production
+                    alert('তথ্য সংরক্ষিত হয়েছে (পাসওয়ার্ড পরিবর্তন করতে Firebase Console ব্যবহার করুন)');
+                }
+                closeEditAdmin();
+                loadAll();
+            } catch (err) { alert('সমস্যা: ' + err.message); }
+        }
+
+        async function blockAdmin(id) {
+            if (!confirm('এই সাব-অ্যাডমিনকে ব্লক করতে চান?')) return;
+            try {
+                await db.collection('admins').doc(id).update({ isBlocked: true });
+                loadAll();
+            } catch (err) { alert('সমস্যা: ' + err.message); }
+        }
+        async function unblockAdmin(id) {
+            try {
+                await db.collection('admins').doc(id).update({ isBlocked: false });
+                loadAll();
+            } catch (err) { alert('সমস্যা: ' + err.message); }
+        }
+        async function delAdmin(id) {
+            if (!confirm('⚠️ সাব-অ্যাডমিন এবং তার তৈরি ইউজার মুছে ফেলা হবে!\n\nচালিয়ে যেতে চান?')) return;
+            try {
+                await db.collection('admins').doc(id).delete();
+                loadAll();
+            } catch (err) { alert('সমস্যা: ' + err.message); }
+        }
+    </script>
+</body>
+</html>
