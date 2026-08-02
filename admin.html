@@ -423,12 +423,14 @@
         }
 
         async function loadAll() {
+            console.log('[Admin] loadAll - START');
             await Promise.all([loadStats(), loadUsers(), loadAdmins()]);
+            console.log('[Admin] loadAll - DONE');
         }
 
         async function loadStats() {
             try {
-                console.log('[Admin] loadStats - starting...');
+                console.log('[Admin] loadStats - START');
                 const [reqSnap, userSnap, blockSnap, adminSnap] = await Promise.all([
                     db.collection('accessRequests').where('status', '==', 'pending').get(),
                     db.collection('activeUsers').where('isBlocked', '==', false).get(),
@@ -441,49 +443,54 @@
                 document.getElementById('sActive').textContent = userSnap.size;
                 document.getElementById('sBlocked').textContent = blockSnap.size;
                 document.getElementById('sSubAdmin').textContent = adminSnap.size;
+                console.log('[Admin] loadStats - DONE, stats updated');
             } catch (err) { 
                 console.error('[Admin] loadStats error:', err); 
             }
         }
 
         async function loadUsers() {
+            console.log('[Admin] loadUsers - START');
             try {
-                // Load pending requests (without orderBy - works without composite index)
+                // Load pending requests
                 const reqSnap = await db.collection('accessRequests')
                     .where('status', '==', 'pending')
                     .get();
                     
-                console.log('[Admin] loadUsers - reqSnap:', reqSnap.size, 'docs');
+                console.log('[Admin] loadUsers - reqSnap.size:', reqSnap.size);
                 
                 pendingData = reqSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                // Sort manually by requestedAt
                 pendingData.sort((a, b) => {
                     const dateA = new Date(a.requestedAt || 0);
                     const dateB = new Date(b.requestedAt || 0);
                     return dateB - dateA;
                 });
 
-                // Load active users
-                console.log('[Admin] loadUsers - querying activeUsers...');
-                const userSnap = await db.collection('activeUsers')
-                    .get();
+                // Load ALL active users (no filter)
+                console.log('[Admin] loadUsers - querying activeUsers collection...');
+                const userSnap = await db.collection('activeUsers').get();
                     
-                console.log('[Admin] loadUsers - userSnap:', userSnap.size, 'docs');
-                console.log('[Admin] loadUsers - userSnap.docs:', userSnap.docs);
+                console.log('[Admin] loadUsers - userSnap.size:', userSnap.size);
+                console.log('[Admin] loadUsers - userSnap.docs.length:', userSnap.docs.length);
                 
                 activeData = userSnap.docs.map(d => ({ id: d.id, ...d.data() }));
                 
-                // Debug: log how many users loaded
-                console.log('[Admin] Pending requests:', pendingData.length);
-                console.log('[Admin] Active users:', activeData.length);
-                activeData.forEach(u => console.log('[Admin] User:', u.userName, u.uniqueKey));
+                console.log('[Admin] loadUsers - pendingData.length:', pendingData.length);
+                console.log('[Admin] loadUsers - activeData.length:', activeData.length);
+                
+                activeData.forEach(u => {
+                    console.log('[Admin] User data:', JSON.stringify(u));
+                });
 
                 allData = [...pendingData, ...activeData];
+                console.log('[Admin] loadUsers - calling renderPending...');
                 renderPending();
+                console.log('[Admin] loadUsers - calling renderActive...');
                 renderActive();
+                console.log('[Admin] loadUsers - DONE');
             } catch (err) { 
                 console.error('[Admin] loadUsers error:', err); 
-                alert('লোড করতে সমস্যা হয়েছে: ' + err.message);
+                alert('Error: ' + err.message);
             }
         }
 
@@ -512,22 +519,29 @@
         }
 
         function renderActive(filtered = null) {
+            console.log('[Admin] renderActive - START');
             const el = document.getElementById('acceptedList');
             
+            console.log('[Admin] renderActive - el:', el);
+            console.log('[Admin] renderActive - activeData.length:', activeData.length);
+            console.log('[Admin] renderActive - filtered:', filtered);
+            
             if (!el) {
-                console.error('[Admin] acceptedList element not found!');
+                console.error('[Admin] renderActive - ERROR: acceptedList element not found!');
                 return;
             }
             
             let data = filtered || activeData;
             
-            console.log('[Admin] renderActive called with', data.length, 'users');
+            console.log('[Admin] renderActive - data.length:', data?.length);
             
             if (!data || !data.length) {
                 el.innerHTML = '<div class="empty-state"><span>👥</span>কোন অ্যাক্টিভ ইউজার নেই</div>';
+                console.log('[Admin] renderActive - No data, showing empty state');
                 return;
             }
 
+            console.log('[Admin] renderActive - Building table with', data.length, 'rows');
             let html = '<table class="data-table"><thead><tr><th>নাম</th><th>ইউনিক কী</th><th>ফোন</th><th>প্রোফাইল</th><th>স্ট্যাটাস</th><th>তৈরি করেছে</th><th>অ্যাকশন</th></tr></thead><tbody>';
             data.forEach(u => {
                 const st = u.isBlocked ? '<span class="badge badge-red">ব্লকড</span>' : '<span class="badge badge-grn">অ্যাক্টিভ</span>';
@@ -547,7 +561,7 @@
             });
             html += '</tbody></table>';
             el.innerHTML = html;
-            console.log('[Admin] Rendered', data.length, 'users in table');
+            console.log('[Admin] renderActive - DONE, table updated');
         }
 
         async function loadAdmins() {
