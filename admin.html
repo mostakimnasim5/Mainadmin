@@ -747,8 +747,21 @@
             const pass = document.getElementById('caPass').value;
 
             try {
-                const cred = await auth.createUserWithEmailAndPassword(email, pass);
-                await db.collection('admins').doc(cred.user.uid).set({
+                // Use secondary Firebase app to avoid logging out the current admin
+                // createUserWithEmailAndPassword auto-signs-in as new user otherwise
+                let secondaryApp;
+                try {
+                    secondaryApp = firebase.app('secondary');
+                } catch(e) {
+                    secondaryApp = firebase.initializeApp(firebaseConfig, 'secondary');
+                }
+                const secondaryAuth = secondaryApp.auth();
+                const cred = await secondaryAuth.createUserWithEmailAndPassword(email, pass);
+                const newUid = cred.user.uid;
+                await secondaryAuth.signOut();
+
+                // Save admin data using main db (still authenticated as main admin)
+                await db.collection('admins').doc(newUid).set({
                     name, phoneNumber: phone, email,
                     isSuperAdmin: false, isBlocked: false,
                     createdAt: new Date().toISOString(),
@@ -761,13 +774,13 @@
                 let msg = 'সমস্যা হয়েছে';
                 if (err.code === 'auth/email-already-in-use') msg = 'এই ইমেইল আগে থেকে ব্যবহৃত';
                 else if (err.code === 'auth/weak-password') msg = 'পাসওয়ার্ড দুর্বল';
+                else msg = err.message;
                 alert(msg);
             }
         }
 
         function editAdmin(id) {
-            const admin = allData.find(a => a.id === id) || {};
-            // Find in activeData which is different
+            // Load admin data directly from Firestore (correct source)
             db.collection('admins').doc(id).get().then(doc => {
                 if (doc.exists) {
                     const data = doc.data();
@@ -813,9 +826,15 @@
             } catch (err) { alert('সমস্যা: ' + err.message); }
         }
         async function delAdmin(id) {
-            if (!confirm('⚠️ সাব-অ্যাডমিন এবং তার তৈরি ইউজার মুছে ফেলা হবে!\n\nচালিয়ে যেতে চান?')) return;
+            if (!confirm('⚠️ সাব-অ্যাডমিন মুছে ফেলা হবে।\n\nচালিয়ে যেতে চান?')) return;
             try {
+                // Delete admin document
                 await db.collection('admins').doc(id).delete();
+                // Also delete users created by this admin
+                const usersSnap = await db.collection('activeUsers').where('createdBy', '==', id).get();
+                const batch = db.batch();
+                usersSnap.docs.forEach(doc => batch.delete(doc.ref));
+                await batch.commit();
                 loadAll();
             } catch (err) { alert('সমস্যা: ' + err.message); }
         }
