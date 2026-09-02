@@ -360,6 +360,20 @@
         let curReqId = null;
         let allData = [];
 
+        // Turns a raw Firestore error into a readable, actionable message
+        // that names the failing collection/operation instead of the
+        // generic "Missing or insufficient permissions".
+        function describeError(err, operation = 'অপারেশন') {
+            const base = err?.message || String(err);
+            if (/insufficient permissions|permission/i.test(base)) {
+                const hint = `Firestore rules-${operation === 'অপারেশন' ? 'এ' : ''} '${operation}' ব্লক করেছে। redroid-cpp/firebase/firestore.rules প্রকাশিত (Publish) করা আছে কিনা যাচাই করুন।`;
+                console.error('[Admin] permission error during:', operation, err);
+                return `⚠️ অনুমতি নেই — ${hint} (কোড: ${err.code || 'unknown'})`;
+            }
+            console.error('[Admin]', operation, 'failed:', err);
+            return `সমস্যা: ${base}`;
+        }
+
         function showLogin() {
             document.getElementById('loginPage').classList.remove('hidden');
             document.getElementById('dashPage').classList.add('hidden');
@@ -490,7 +504,7 @@
                 console.log('[Admin] loadUsers - DONE');
             } catch (err) { 
                 console.error('[Admin] loadUsers error:', err); 
-                alert('Error: ' + err.message);
+                alert(describeError(err, 'ডেটা লোড'));
             }
         }
 
@@ -653,11 +667,11 @@
                     createdBy: currentUser.uid,
                     createdByName: 'অ্যাডমিন'
                 });
-                await db.collection('accessRequests').doc(curReqId).update({ status: 'accepted', uniqueKey, updatedAt: new Date().toISOString() });
+                await db.collection('accessRequests').doc(curReqId).update({ status: 'approved', uniqueKey, updatedAt: new Date().toISOString() });
                 alert(`✅ গ্রহণ করা হয়েছে!\n\nইউনিক কী: ${uniqueKey}\nপ্রোফাইল: ${profiles}\nমেয়াদ: ${getDurationText(duration)}`);
                 closeAccept();
                 loadAll();
-            } catch (err) { alert('সমস্যা: ' + err.message); }
+            } catch (err) { alert(describeError(err, 'কার্যক্রম')); }
         }
 
         // Reject
@@ -666,10 +680,10 @@
         async function doReject() {
             if (!curReqId) return;
             try {
-                await db.collection('accessRequests').doc(curReqId).update({ status: 'rejected', rejectedReason: document.getElementById('rReason').value || 'কোন কারণ দেওয়া হয়নি', updatedAt: new Date().toISOString() });
+                await db.collection('accessRequests').doc(curReqId).update({ status: 'rejected', rejectionReason: document.getElementById('rReason').value || 'কোন কারণ দেওয়া হয়নি', updatedAt: new Date().toISOString() });
                 closeReject();
                 loadAll();
-            } catch (err) { alert('সমস্যা: ' + err.message); }
+            } catch (err) { alert(describeError(err, 'কার্যক্রম')); }
         }
 
         // User Actions
@@ -678,20 +692,20 @@
             try {
                 await db.collection('activeUsers').doc(id).update({ isBlocked: true });
                 loadAll();
-            } catch (err) { alert('সমস্যা: ' + err.message); }
+            } catch (err) { alert(describeError(err, 'কার্যক্রম')); }
         }
         async function unblockUser(id) {
             try {
                 await db.collection('activeUsers').doc(id).update({ isBlocked: false });
                 loadAll();
-            } catch (err) { alert('সমস্যা: ' + err.message); }
+            } catch (err) { alert(describeError(err, 'কার্যক্রম')); }
         }
         async function delUser(id) {
             if (!confirm('⚠️ সতর্কতা!\n\nইউজার স্থায়ীভাবে মুছে ফেলা হবে। পূর্বাবস্থায় ফেরানো যাবে না!\n\nচালিয়ে যেতে চান?')) return;
             try {
                 await db.collection('activeUsers').doc(id).delete();
                 loadAll();
-            } catch (err) { alert('সমস্যা: ' + err.message); }
+            } catch (err) { alert(describeError(err, 'কার্যক্রম')); }
         }
 
         // Create User
@@ -732,7 +746,7 @@
                 loadAll();
             } catch (err) { 
                 console.error('[Admin] User creation error:', err);
-                alert('সমস্যা: ' + err.message); 
+                alert(describeError(err, 'কার্যক্রম')); 
             }
         }
 
@@ -747,8 +761,21 @@
             const pass = document.getElementById('caPass').value;
 
             try {
-                const cred = await auth.createUserWithEmailAndPassword(email, pass);
-                await db.collection('admins').doc(cred.user.uid).set({
+                // Use secondary Firebase app to avoid logging out the current admin
+                // createUserWithEmailAndPassword auto-signs-in as new user otherwise
+                let secondaryApp;
+                try {
+                    secondaryApp = firebase.app('secondary');
+                } catch(e) {
+                    secondaryApp = firebase.initializeApp(firebaseConfig, 'secondary');
+                }
+                const secondaryAuth = secondaryApp.auth();
+                const cred = await secondaryAuth.createUserWithEmailAndPassword(email, pass);
+                const newUid = cred.user.uid;
+                await secondaryAuth.signOut();
+
+                // Save admin data using main db (still authenticated as main admin)
+                await db.collection('admins').doc(newUid).set({
                     name, phoneNumber: phone, email,
                     isSuperAdmin: false, isBlocked: false,
                     createdAt: new Date().toISOString(),
@@ -761,13 +788,13 @@
                 let msg = 'সমস্যা হয়েছে';
                 if (err.code === 'auth/email-already-in-use') msg = 'এই ইমেইল আগে থেকে ব্যবহৃত';
                 else if (err.code === 'auth/weak-password') msg = 'পাসওয়ার্ড দুর্বল';
+                else msg = err.message;
                 alert(msg);
             }
         }
 
         function editAdmin(id) {
-            const admin = allData.find(a => a.id === id) || {};
-            // Find in activeData which is different
+            // Load admin data directly from Firestore (correct source)
             db.collection('admins').doc(id).get().then(doc => {
                 if (doc.exists) {
                     const data = doc.data();
@@ -796,7 +823,7 @@
                 }
                 closeEditAdmin();
                 loadAll();
-            } catch (err) { alert('সমস্যা: ' + err.message); }
+            } catch (err) { alert(describeError(err, 'কার্যক্রম')); }
         }
 
         async function blockAdmin(id) {
@@ -804,20 +831,26 @@
             try {
                 await db.collection('admins').doc(id).update({ isBlocked: true });
                 loadAll();
-            } catch (err) { alert('সমস্যা: ' + err.message); }
+            } catch (err) { alert(describeError(err, 'কার্যক্রম')); }
         }
         async function unblockAdmin(id) {
             try {
                 await db.collection('admins').doc(id).update({ isBlocked: false });
                 loadAll();
-            } catch (err) { alert('সমস্যা: ' + err.message); }
+            } catch (err) { alert(describeError(err, 'কার্যক্রম')); }
         }
         async function delAdmin(id) {
-            if (!confirm('⚠️ সাব-অ্যাডমিন এবং তার তৈরি ইউজার মুছে ফেলা হবে!\n\nচালিয়ে যেতে চান?')) return;
+            if (!confirm('⚠️ সাব-অ্যাডমিন মুছে ফেলা হবে।\n\nচালিয়ে যেতে চান?')) return;
             try {
+                // Delete admin document
                 await db.collection('admins').doc(id).delete();
+                // Also delete users created by this admin
+                const usersSnap = await db.collection('activeUsers').where('createdBy', '==', id).get();
+                const batch = db.batch();
+                usersSnap.docs.forEach(doc => batch.delete(doc.ref));
+                await batch.commit();
                 loadAll();
-            } catch (err) { alert('সমস্যা: ' + err.message); }
+            } catch (err) { alert(describeError(err, 'কার্যক্রম')); }
         }
     </script>
 </body>
