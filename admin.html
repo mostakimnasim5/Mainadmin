@@ -428,6 +428,14 @@
             return key;
         }
 
+        // Canonicalize BD phone numbers so the desktop client's login query
+        // matches regardless of the format typed ("+8801..." -> "01...").
+        function normalizePhone(phone) {
+            let digits = String(phone || '').replace(/[^0-9]/g, '');
+            if (digits.startsWith('880') && digits.length > 11) digits = '0' + digits.slice(3);
+            return digits;
+        }
+
         function getDurationText(minutes) {
             if (minutes < 60) return minutes + ' মিনিট';
             if (minutes < 1440) return (minutes / 60) + ' ঘণ্টা';
@@ -656,7 +664,7 @@
             try {
                 await db.collection('activeUsers').doc(curReqId).set({
                     userName: r.userName || 'User',
-                    contactNumber: r.contactNumber || '',
+                    contactNumber: normalizePhone(r.contactNumber),
                     uniqueKey,
                     remainingProfiles: profiles,
                     totalProfiles: profiles,
@@ -724,7 +732,7 @@
                 
                 await db.collection('activeUsers').doc(userId).set({
                     userName: name || 'User',
-                    contactNumber: phone || '',
+                    contactNumber: normalizePhone(phone),
                     uniqueKey,
                     remainingProfiles: profiles,
                     totalProfiles: profiles,
